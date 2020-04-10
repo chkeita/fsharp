@@ -6839,7 +6839,7 @@ and TcAssertExpr cenv overallTy env (m: range) tpenv x =
 
 
 and TcRecdExpr cenv overallTy env tpenv (inherits, optOrigExpr, flds, mWholeExpr) =
-
+    
     let requiresCtor = (GetCtorShapeCounter env = 1) // Get special expression forms for constructors 
     let haveCtor = Option.isSome inherits
 
@@ -6901,8 +6901,18 @@ and TcRecdExpr cenv overallTy env tpenv (inherits, optOrigExpr, flds, mWholeExpr
             let errorInfo = if hasOrigExpr then FSComp.SR.tcEmptyCopyAndUpdateRecordInvalid() else FSComp.SR.tcEmptyRecordInvalid()
             error(Error(errorInfo, mWholeExpr))
 
+//         let isProvidedRecord g ty = 
+// #if !NO_EXTENSIONTYPING 
+//             match metadataOfTy g ty with
+//             | ProvidedTypeMetadata info -> info.IsRecord
+//             | _ -> 
+// #endif
+//                 false
+
         if isFSharpObjModelTy cenv.g overallTy then errorR(Error(FSComp.SR.tcTypeIsNotARecordTypeNeedConstructor(), mWholeExpr))
         elif not (isRecdTy cenv.g overallTy) then errorR(Error(FSComp.SR.tcTypeIsNotARecordType(), mWholeExpr))
+       
+        //elif not (isRecdTy cenv.g overallTy || isProvidedRecord cenv.g overallTy) then errorR(Error(FSComp.SR.tcTypeIsNotARecordType(), mWholeExpr))
 
     let superTy, tpenv = 
         match inherits, GetSuperTypeOfType cenv.g cenv.amap mWholeExpr overallTy with 

@@ -907,6 +907,8 @@ type Entity =
     member x.AllFieldTable = 
         match x.TypeReprInfo with 
         | TRecdRepr x | TFSharpObjectRepr {fsobjmodel_rfields=x} -> x
+        | TProvidedTypeExtensionPoint x when x.IsRecord ->
+           x.RecordFields.Value
         | _ -> 
         match x.ExceptionInfo with 
         | TExnFresh x -> x
@@ -1473,6 +1475,12 @@ type TProvidedTypeInfo =
 
       /// Indicates the type is generated, but type-relocation is suppressed
       IsSuppressRelocate: bool
+
+      /// Indicates the type is a record
+      IsRecord: bool
+
+      /// Gets the fields if this is a record
+      RecordFields: Lazy<TyconRecdFields>
     }
 
     /// Indicates if the provided type is generated, i.e. not erased
@@ -5362,6 +5370,61 @@ type Construct() =
                       | Some t -> importProvidedType t),
                   ErrorLogger.findOriginalException)
 
+        let isRecord =
+            st.PUntaint(
+                (fun providedType ->
+                    let customAttributes =
+                        (providedType :> IProvidedCustomAttributeProvider).GetAttributeConstructorArgs(
+                            st.TypeProvider.PUntaintNoFailure id, typeof<CompilationMappingAttribute>.FullName)
+                    match customAttributes with 
+                    | Some ([Some (:? int as flag)], _) -> 
+                        flag = int SourceConstructFlags.RecordType
+                    | Some _ | None -> false),m)
+        let getRecordFields(providedType: ProvidedType) = 
+            lazy 
+                if isRecord then
+                    let fields = 
+                        providedType.GetProperties()
+                        |> Seq.choose(fun prop ->
+                            let attributeProvider = prop :> IProvidedCustomAttributeProvider
+                            let customAttributes = attributeProvider.GetAttributeConstructorArgs(st.TypeProvider.PUntaintNoFailure id, typeof<CompilationMappingAttribute>.FullName)
+                            match customAttributes with
+                            | Some ([Some (:? int as flag); Some (:? int as sequenceNumber)],_) when flag = int SourceConstructFlags.Field -> 
+                                let ttype = importProvidedType (st.PApply((fun _ -> prop.PropertyType ),m) )
+                                let docs = attributeProvider.GetXmlDocAttributes(st.TypeProvider.PUntaintNoFailure id)
+                                Some((prop.Name,ttype, docs), sequenceNumber)
+                            | _ -> None)
+                        |> Seq.sortBy snd
+                        |> Seq.map(fun ((name,ttype,docs),_) -> 
+                            { 
+                                rfield_mutable = false
+                                rfield_xmldoc = XmlDoc docs
+                                rfield_xmldocsig = ""
+                                rfield_type = ttype
+                                rfield_static = false
+                                rfield_volatile = false
+                                rfield_secret = false
+                                rfield_const = None
+                                rfield_access =  Accessibility.TAccess []
+                                rfield_pattribs = []
+                                rfield_fattribs = []
+                                rfield_id = Ident(name, m)
+                                rfield_name_generated = false
+                                rfield_other_range= None
+                            })
+                        |> Seq.toArray
+
+                    {  
+                        TyconRecdFields.FieldsByIndex = fields
+                        TyconRecdFields.FieldsByName = 
+                            fields |> Seq.map(fun f -> f.Name, f) |> Map.ofSeq
+                    }
+                else 
+                    {
+                        TyconRecdFields.FieldsByIndex = [||]
+                        TyconRecdFields.FieldsByName = NameMap.Empty
+                    }
+
         TProvidedTypeExtensionPoint 
             { ResolutionEnvironment=resolutionEnvironment
               ProvidedType=st
@@ -5381,7 +5444,9 @@ type Construct() =
               IsAbstract = st.PUntaint((fun st -> st.IsAbstract), m)
               IsClass = st.PUntaint((fun st -> st.IsClass), m)
               IsErased = isErased
-              IsSuppressRelocate = isSuppressRelocate }
+              IsSuppressRelocate = isSuppressRelocate 
+              IsRecord = isRecord
+              RecordFields = st.PUntaint(getRecordFields,m)}
 
     /// Create a new entity node for a provided type definition
     static member NewProvidedTycon(resolutionEnvironment, st: Tainted<ProvidedType>, importProvidedType, isSuppressRelocate, m, ?access, ?cpath) = 

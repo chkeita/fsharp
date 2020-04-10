@@ -819,7 +819,7 @@ let isStructAnonRecdTy g ty = ty |> stripTyEqns g |> (function TType_anon (anonI
 let isUnionTy g ty = ty |> stripTyEqns g |> (function TType_app(tcref, _) -> tcref.IsUnionTycon | _ -> false)
 let isReprHiddenTy g ty = ty |> stripTyEqns g |> (function TType_app(tcref, _) -> tcref.IsHiddenReprTycon | _ -> false)
 let isFSharpObjModelTy g ty = ty |> stripTyEqns g |> (function TType_app(tcref, _) -> tcref.IsFSharpObjectModelTycon | _ -> false)
-let isRecdTy g ty = ty |> stripTyEqns g |> (function TType_app(tcref, _) -> tcref.IsRecordTycon | _ -> false)
+//let isRecdTy g ty = ty |> stripTyEqns g |> (function TType_app(tcref, _) -> tcref.IsRecordTycon | _ -> false)
 let isFSharpStructOrEnumTy g ty = ty |> stripTyEqns g |> (function TType_app(tcref, _) -> tcref.IsFSharpStructOrEnumTycon | _ -> false)
 let isFSharpEnumTy g ty = ty |> stripTyEqns g |> (function TType_app(tcref, _) -> tcref.IsFSharpEnumTycon | _ -> false)
 let isTyparTy g ty = ty |> stripTyEqns g |> (function TType_var _ -> true | _ -> false)
@@ -1723,6 +1723,13 @@ let metadataOfTy g ty =
     else 
         FSharpOrArrayOrByrefOrTupleOrExnTypeMetadata 
 
+let isRecdTy g ty = 
+#if !NO_EXTENSIONTYPING
+    match metadataOfTy g ty with 
+    | ProvidedTypeMetadata info -> info.IsRecord
+    | _ -> 
+#endif    
+        ty |> stripTyEqns g |> (function TType_app(tcref, _) -> tcref.IsRecordTycon | _ -> false)
 
 let isILReferenceTy g ty = 
     match metadataOfTy g ty with 

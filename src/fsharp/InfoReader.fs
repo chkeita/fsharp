@@ -150,7 +150,11 @@ let rec GetImmediateIntrinsicPropInfosOfTypeAux (optFilter, ad) g amap m origTy 
                 |   Some name ->
                         match st.PApply((fun st -> st.GetProperty name), m) with
                         |   Tainted.Null -> [||]
-                        |   pi -> [|pi|]
+                        |   pi -> 
+                            if pi.PUntaint((fun prop -> info.RecordFields.Value.FieldsByName.ContainsKey prop.Name), m) then 
+                                [||]
+                            else
+                                [|pi|]
                 |   None ->
                         st.PApplyArray((fun st -> st.GetProperties()), "GetProperties", m)
             matchingProps
