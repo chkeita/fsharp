@@ -5398,7 +5398,7 @@ type Construct() =
                         |> Seq.map(fun ((name,ttype,docs),_) -> 
                             { 
                                 rfield_mutable = false
-                                rfield_xmldoc = XmlDoc docs
+                                rfield_xmldoc = XmlDoc (docs, Range.range0)
                                 rfield_xmldocsig = ""
                                 rfield_type = ttype
                                 rfield_static = false
